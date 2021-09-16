@@ -16,7 +16,7 @@ help() {
   gh orgissuelist --org ORG [flags]
 
 \033[1mFLAGS\033[0m
-  --org string            Mandatory name of the organization
+  -o, --org string        Mandatory name of the organization
   -a, --assignee string   Filter by assignee
   -A, --author string     Filter by author
   -l, --label string      Filter by labels
@@ -28,7 +28,7 @@ help() {
 
 
 \033[1mEXAMPLES\033[0m
-  $ gh orgissuelist --org myorg
+  $ gh orgissuelist -o myorg
 
 \033[1mLEARN MORE\033[0m
   https://github.com/dariooddenino/gh-orgissuelist
