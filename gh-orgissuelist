@@ -1,0 +1,122 @@
+#!/bin/bash
+set -e
+
+# Future upgrades
+# Color labels
+
+# pass the other options from gh issue list
+# tweak args
+# change name to orgissuelist
+# add help
+
+help() {
+  printf "List and filter issues for the given GitHub organization.
+
+\033[1mUSAGE\033[0m
+  gh orgissuelist --org ORG [flags]
+
+\033[1mFLAGS\033[0m
+  --org string            Mandatory name of the organization
+  -a, --assignee string   Filter by assignee
+  -A, --author string     Filter by author
+  -l, --label string      Filter by labels
+  -L, --limit int         Maximum number of issues per repo to fetch (default 10)
+      --mention string    Filter by mention
+  -m, --milestone number  Filter by milestone number or `title`
+  -S, --search query      Search issues with query
+  -s, --state string      Filter by state: {open|closed|all} (default \"open\")
+
+
+\033[1mEXAMPLES\033[0m
+  $ gh orgissuelist --org myorg
+
+\033[1mLEARN MORE\033[0m
+  https://github.com/dariooddenino/gh-orgissuelist
+"
+}
+
+while [ $# -gt 0 ]
+do
+  case "$1" in
+    --org*|-o*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      ORG="${1#*=}"
+      ;;
+    --help|-h)
+      help
+      exit 0
+      ;;
+    *)
+      >&2 printf "Error: Invalid argument or option not implemented yet.\n"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [ -z "$ORG" ]
+then
+  echo "Please, pass an org name with --org"
+  exit 1
+fi
+
+# QUERY='
+#   query ($endCursor:String, $login: String!) {
+#       organization(login: $login) {
+#         repositories(first: 100, after: $endCursor, isFork: false) {
+#           nodes { nameWithOwner }
+#         }
+#       }
+#   }
+# '
+# items=$(gh api graphql -F login="${ORG}" -f query="${QUERY}" --jq '.data.organization.repositories.nodes.[].nameWithOwner')
+# for item in ${items[@]}; do
+#   gh issue list -R "$item" "$@"
+# done
+
+QUERY2='
+  query ($login: String!) {
+    organization(login: $login) {
+      name
+      repositories(first:100, isFork: false, orderBy: { field: NAME, direction: ASC }) {
+        edges {
+          node {
+            name
+            issues(last:10, states:OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
+              edges {
+                node {
+                  title
+                  number
+                  createdAt
+                  labels(first: 2) {
+                    edges {
+                      node {
+                        name
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+'
+
+# labels non va
+TEMPLATE='
+  {{- printf "\n> Showing open issues for %v\n\n" .data.organization.name -}}
+  {{- range $repo := .data.organization.repositories.edges -}}
+    {{- range $issue := $repo.node.issues.edges -}}
+      {{- $number := printf "%v#%v" $repo.node.name $issue.node.number | autocolor "green" -}}
+      {{- $labels := $issue.node.labels.edges | pluck "node" | pluck "name" | join ", " -}} 
+      {{- $timeAgo := timeago $issue.node.createdAt | autocolor "black+h" -}}
+      {{- tablerow $number $issue.node.title $labels $timeAgo -}}
+    {{- end -}}
+  {{- end -}}
+'
+
+
+gh api graphql -F login="${ORG}" -f query="${QUERY2}" --template="${TEMPLATE}"
