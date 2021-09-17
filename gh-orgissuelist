@@ -1,14 +1,6 @@
 #!/bin/bash
 set -e
 
-# Future upgrades
-# Color labels
-
-# pass the other options from gh issue list
-# tweak args
-# change name to orgissuelist
-# add help
-
 help() {
   printf "List and filter issues for the given GitHub organization.
 
@@ -42,6 +34,38 @@ do
       if [[ "$1" != *=* ]]; then shift; fi
       ORG="${1#*=}"
       ;;
+    --assignee*|-a*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      ASSIGNEE="${1#*=}"
+      ;;
+    --author*|-A*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      AUTHOR="${1#*=}"
+      ;;
+    --label*|-l*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      LABEL="${1#*=}"
+      ;;
+    --limit*|-L*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      LIMIT="${1#*=}"
+      ;;
+    --mention*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      MENTION="${1#*=}"
+      ;;
+    --milestone*|-m*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      MILESTONE="${1#*=}"
+      ;;
+    --search|-S*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      SEARCH="${1#*=}"
+      ;;
+    --state|-s*)
+      if [[ "$1" != *=* ]]; then shift; fi
+      STATE="${1#*=}"
+      ;;
     --help|-h)
       help
       exit 0
@@ -60,29 +84,25 @@ then
   exit 1
 fi
 
-# QUERY='
-#   query ($endCursor:String, $login: String!) {
-#       organization(login: $login) {
-#         repositories(first: 100, after: $endCursor, isFork: false) {
-#           nodes { nameWithOwner }
-#         }
-#       }
-#   }
-# '
-# items=$(gh api graphql -F login="${ORG}" -f query="${QUERY}" --jq '.data.organization.repositories.nodes.[].nameWithOwner')
-# for item in ${items[@]}; do
-#   gh issue list -R "$item" "$@"
-# done
+if [ -z "$LIMIT" ]
+then
+  LIMIT=10
+fi
+
+if [ -z "$STATE"]
+then
+  STATE="open"
+fi
 
 QUERY2='
-  query ($login: String!) {
+  query ($login: String!, $limit: Int!, $state: [IssueState!]) {
     organization(login: $login) {
       name
       repositories(first:100, isFork: false, orderBy: { field: NAME, direction: ASC }) {
         edges {
           node {
             name
-            issues(last:10, states:OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
+            issues(last: $limit, states: $state, orderBy: { field: CREATED_AT, direction: DESC }) {
               edges {
                 node {
                   title
@@ -106,17 +126,16 @@ QUERY2='
 '
 
 # labels non va
-TEMPLATE='
-  {{- printf "\n> Showing open issues for %v\n\n" .data.organization.name -}}
-  {{- range $repo := .data.organization.repositories.edges -}}
-    {{- range $issue := $repo.node.issues.edges -}}
-      {{- $number := printf "%v#%v" $repo.node.name $issue.node.number | autocolor "green" -}}
-      {{- $labels := $issue.node.labels.edges | pluck "node" | pluck "name" | join ", " -}} 
-      {{- $timeAgo := timeago $issue.node.createdAt | autocolor "black+h" -}}
-      {{- tablerow $number $issue.node.title $labels $timeAgo -}}
+TEMPLATE="
+  {{- printf \"\n> Showing ${STATE} issues for %v\n\n\" .data.organization.name -}}
+  {{- range \$repo := .data.organization.repositories.edges -}}
+    {{- range \$issue := \$repo.node.issues.edges -}}
+      {{- \$number := printf \"%v#%v\" \$repo.node.name \$issue.node.number | autocolor \"green\" -}}
+      {{- \$labels := \$issue.node.labels.edges | pluck \"node\" | pluck \"name\" | join \", \" -}} 
+      {{- \$timeAgo := timeago \$issue.node.createdAt | autocolor \"black+h\" -}}
+      {{- tablerow \$number \$issue.node.title \$labels \$timeAgo -}}
     {{- end -}}
   {{- end -}}
-'
+"
 
-
-gh api graphql -F login="${ORG}" -f query="${QUERY2}" --template="${TEMPLATE}"
+gh api graphql -F login="${ORG}" -F limit="${LIMIT}" -F state="${STATE^^}" -f query="${QUERY2}" --template="${TEMPLATE}"
