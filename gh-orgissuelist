@@ -80,8 +80,13 @@ done
 
 if [ -z "$ORG" ]
 then
-  echo "Please, pass an org name with --org"
-  exit 1
+  if [ -z "$GITHUB_ORG" ] 
+  then
+    echo "Please, pass an org name with --org"
+    exit 1
+  else 
+    ORG="$GITHUB_ORG"
+  fi
 fi
 
 if [ -z "$LIMIT" ]
